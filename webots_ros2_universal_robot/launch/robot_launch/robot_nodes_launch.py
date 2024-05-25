@@ -26,23 +26,25 @@ from webots_ros2_driver.urdf_spawner import URDFSpawner, get_webots_driver_node
 from webots_ros2_driver.utils import controller_url_prefix
 
 
-PACKAGE_NAME = 'webots_ros2_universal_robot'
+PACKAGE_NAME = "webots_ros2_universal_robot"
 
 
 def generate_launch_description():
     package_dir = get_package_share_directory(PACKAGE_NAME)
-    ur5e_urdf_path = os.path.join(package_dir, 'resource', 'ur5e_with_gripper.urdf')
+    ur5e_urdf_path = os.path.join(package_dir, "resource", "ur5e_with_gripper.urdf")
     robot_description = pathlib.Path(ur5e_urdf_path).read_text()
-    ros2_control_params = os.path.join(package_dir, 'resource', 'ros2_control_config.yaml')
+    ros2_control_params = os.path.join(
+        package_dir, "resource", "ros2_control_config.yaml"
+    )
 
     # Define your URDF robots here
     # The name of an URDF robot has to match the WEBOTS_CONTROLLER_URL of the driver node
     # You can specify the URDF file to use with "urdf_path"
     spawn_URDF_ur5e = URDFSpawner(
-        name='UR5e',
+        name="UR5e",
         urdf_path=ur5e_urdf_path,
-        translation='0 0 0.6',
-        rotation='0 0 1 -1.5708',
+        translation="0 0 0.6",
+        rotation="0 0 1 -1.5708",
     )
 
     # Driver nodes
@@ -51,70 +53,72 @@ def generate_launch_description():
     # You can check for more information at:
     # https://cyberbotics.com/doc/guide/running-extern-robot-controllers#single-simulation-and-multiple-extern-robot-controllers
     universal_robot_driver = Node(
-        package='webots_ros2_driver',
-        executable='driver',
-        output='screen',
-        additional_env={'WEBOTS_CONTROLLER_URL': controller_url_prefix() + 'UR5e'},
+        package="webots_ros2_driver",
+        executable="driver",
+        output="screen",
+        additional_env={"WEBOTS_CONTROLLER_URL": controller_url_prefix() + "UR5e"},
         parameters=[
-            {'robot_description': robot_description},
-            {'use_sim_time': True},
-            ros2_control_params
+            {"robot_description": robot_description},
+            {"use_sim_time": True},
+            ros2_control_params,
         ],
     )
 
     # Other ROS 2 nodes
-    controller_manager_timeout = ['--controller-manager-timeout', '100']
-    controller_manager_prefix = 'python.exe' if os.name == 'nt' else ''
+    controller_manager_timeout = ["--controller-manager-timeout", "100"]
+    controller_manager_prefix = "python.exe" if os.name == "nt" else ""
 
-    use_deprecated_spawner_py = 'ROS_DISTRO' in os.environ and os.environ['ROS_DISTRO'] == 'foxy'
+    use_deprecated_spawner_py = (
+        "ROS_DISTRO" in os.environ and os.environ["ROS_DISTRO"] == "foxy"
+    )
 
     trajectory_controller_spawner = Node(
-        package='controller_manager',
-        executable='spawner' if not use_deprecated_spawner_py else 'spawner.py',
-        output='screen',
+        package="controller_manager",
+        executable="spawner" if not use_deprecated_spawner_py else "spawner.py",
+        output="screen",
         prefix=controller_manager_prefix,
-        arguments=['ur_joint_trajectory_controller'] + controller_manager_timeout,
+        arguments=["ur_joint_trajectory_controller"] + controller_manager_timeout,
     )
 
     joint_state_broadcaster_spawner = Node(
-        package='controller_manager',
-        executable='spawner' if not use_deprecated_spawner_py else 'spawner.py',
-        output='screen',
+        package="controller_manager",
+        executable="spawner" if not use_deprecated_spawner_py else "spawner.py",
+        output="screen",
         prefix=controller_manager_prefix,
-        arguments=['ur_joint_state_broadcaster'] + controller_manager_timeout,
+        arguments=["ur_joint_state_broadcaster"] + controller_manager_timeout,
     )
 
     robot_state_publisher = Node(
-        package='robot_state_publisher',
-        executable='robot_state_publisher',
-        output='screen',
-        parameters=[{
-            'robot_description': robot_description
-        }],
+        package="robot_state_publisher",
+        executable="robot_state_publisher",
+        output="screen",
+        parameters=[{"robot_description": robot_description}],
     )
 
-    return LaunchDescription([
-        # Request to spawn the URDF robot
-        spawn_URDF_ur5e,
-
-        # Other ROS 2 nodes
-        robot_state_publisher,
-        trajectory_controller_spawner,
-        joint_state_broadcaster_spawner,
-
-        # Launch the driver node once the URDF robot is spawned
-        launch.actions.RegisterEventHandler(
-            event_handler=launch.event_handlers.OnProcessIO(
-                target_action=spawn_URDF_ur5e,
-                on_stdout=lambda event: get_webots_driver_node(event, universal_robot_driver),
-            )
-        ),
-
-        # Kill all the nodes when the driver node is shut down
-        launch.actions.RegisterEventHandler(
-            event_handler=launch.event_handlers.OnProcessExit(
-                target_action=universal_robot_driver,
-                on_exit=[launch.actions.EmitEvent(event=launch.events.Shutdown())],
-            )
-        ),
-    ])
+    return LaunchDescription(
+        [
+            # Request to spawn the URDF robot
+            spawn_URDF_ur5e,
+            # Other ROS 2 nodes
+            robot_state_publisher,
+            trajectory_controller_spawner,
+            joint_state_broadcaster_spawner,
+            # Launch the driver node once the URDF robot is spawned
+            # 注册一个事件处理器，这个处理器会在spawn_URDF_ur5e的标准输出发生变化时触发，调用get_webots_driver_node函数来处理这个事件
+            launch.actions.RegisterEventHandler(
+                event_handler=launch.event_handlers.OnProcessIO(
+                    target_action=spawn_URDF_ur5e,
+                    on_stdout=lambda event: get_webots_driver_node(
+                        event, universal_robot_driver
+                    ),
+                )
+            ),
+            # Kill all the nodes when the driver node is shut down
+            launch.actions.RegisterEventHandler(
+                event_handler=launch.event_handlers.OnProcessExit(
+                    target_action=universal_robot_driver,
+                    on_exit=[launch.actions.EmitEvent(event=launch.events.Shutdown())],
+                )
+            ),
+        ]
+    )
